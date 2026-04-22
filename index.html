@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>AR Treasure Hunt</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      overflow: hidden;
+      background: #000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+    }
+
+    #overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding-bottom: 48px;
+      gap: 12px;
+    }
+
+    #status {
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      color: #fff;
+      padding: 14px 28px;
+      border-radius: 32px;
+      font-size: 17px;
+      font-weight: 500;
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      transition: opacity 0.4s;
+    }
+
+    #distance-badge {
+      background: rgba(255, 215, 0, 0.9);
+      color: #1a1000;
+      padding: 8px 22px;
+      border-radius: 20px;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      transition: opacity 0.4s;
+    }
+
+    #collected-screen {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.75);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+
+    #collected-screen.show { display: flex; }
+
+    #collected-screen .star { font-size: 72px; animation: pop 0.5s ease-out; }
+    #collected-screen .title {
+      color: #FFD700;
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: 1px;
+    }
+    #collected-screen .subtitle {
+      color: rgba(255,255,255,0.7);
+      font-size: 16px;
+    }
+
+    @keyframes pop {
+      0%   { transform: scale(0); opacity: 0; }
+      70%  { transform: scale(1.2); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Game UI -->
+  <div id="overlay">
+    <div id="status">Find the golden circle!</div>
+    <div id="distance-badge" style="display:none">— m away</div>
+  </div>
+
+  <!-- Collected celebration -->
+  <div id="collected-screen">
+    <div class="star">⭐</div>
+    <div class="title">Treasure Found!</div>
+    <div class="subtitle">You collected the golden circle.</div>
+  </div>
+
+  <!-- Three.js r158 (satisfies zappar-threejs >= 0.154 peer dep) -->
+  <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+
+  <!-- ZapWorks Universal AR – ThreeJS, standalone CDN build -->
+  <script src="https://libs.zappar.com/zappar-threejs/4.3.0/zappar-threejs.js"></script>
+
+  <script>
+    // ── Renderer ─────────────────────────────────────────────────────────────
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    ZapparThree.glContextSet(renderer.getContext());
+
+    // ── Scene & Camera ────────────────────────────────────────────────────────
+    const scene = new THREE.Scene();
+    const camera = new ZapparThree.Camera();
+    scene.background = camera.backgroundTexture;
+
+    // ── Instant World Tracker ─────────────────────────────────────────────────
+    // Instant tracking anchors AR content to the real world without an image target.
+    const instantTracker = new ZapparThree.InstantWorldTracker();
+    const instantAnchor = new ZapparThree.InstantWorldAnchorGroup(camera, instantTracker);
+    scene.add(instantAnchor);
+
+    // Place anchor 3 m in front of the user's starting position.
+    // Call this once; the anchor stays fixed in world space after placement.
+    instantTracker.setAnchorPoseFromCameraOffset(0, 0, -3);
+
+    // ── Lighting ──────────────────────────────────────────────────────────────
+    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+
+    const sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    sunLight.position.set(1, 3, 2);
+    scene.add(sunLight);
+
+    // ── Golden Circle (collectible) ───────────────────────────────────────────
+    // Flat disc sitting at the anchor origin (the floor point 3 m ahead).
+    const discGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.03, 48);
+    const discMat = new THREE.MeshStandardMaterial({
+      color: 0xFFD700,
+      emissive: 0xFFAA00,
+      emissiveIntensity: 0.6,
+      roughness: 0.25,
+      metalness: 0.6,
+    });
+    const disc = new THREE.Mesh(discGeo, discMat);
+    disc.position.set(0, 0, 0);
+    instantAnchor.add(disc);
+
+    // Floating halo ring above the disc
+    const ringGeo = new THREE.TorusGeometry(0.36, 0.025, 8, 48);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xFFE44D,
+      transparent: true,
+      opacity: 0.85,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(0, 0.12, 0);
+    instantAnchor.add(ring);
+
+    // Warm point light so the disc lights up nearby surfaces
+    const glow = new THREE.PointLight(0xFFD700, 1.5, 1.8);
+    glow.position.set(0, 0.4, 0);
+    instantAnchor.add(glow);
+
+    // ── Camera Permissions ────────────────────────────────────────────────────
+    ZapparThree.permissionRequestUI().then(granted => {
+      if (granted) camera.start();
+      else ZapparThree.permissionDeniedUI();
+    });
+
+    // ── UI Elements ───────────────────────────────────────────────────────────
+    const statusEl      = document.getElementById('status');
+    const distanceBadge = document.getElementById('distance-badge');
+    const collectedScreen = document.getElementById('collected-screen');
+
+    let collected = false;
+    const targetWorldPos = new THREE.Vector3();
+
+    // ── Render Loop ───────────────────────────────────────────────────────────
+    function animate() {
+      requestAnimationFrame(animate);
+      camera.updateFrame(renderer);
+
+      if (!collected) {
+        const t = Date.now() * 0.001;
+
+        // Pulse the disc in XZ plane
+        const pulse = 1 + 0.09 * Math.sin(t * 2.2);
+        disc.scale.set(pulse, 1, pulse);
+
+        // Bob the halo ring up and down
+        ring.position.y = 0.1 + 0.06 * Math.sin(t * 2.2);
+        ring.scale.setScalar(pulse);
+
+        // Modulate glow intensity
+        glow.intensity = 1.2 + 0.6 * Math.sin(t * 2.2);
+
+        // Proximity check: distance from camera to disc in world space
+        disc.getWorldPosition(targetWorldPos);
+        const dist = camera.position.distanceTo(targetWorldPos);
+
+        distanceBadge.style.display = 'block';
+        distanceBadge.textContent = dist.toFixed(1) + ' m away';
+
+        if (dist < 0.65) {
+          // ── Collected! ────────────────────────────────────────────────────
+          collected = true;
+          disc.visible = false;
+          ring.visible = false;
+          glow.visible = false;
+          document.getElementById('overlay').style.display = 'none';
+          collectedScreen.classList.add('show');
+        } else if (dist < 1.5) {
+          statusEl.textContent = 'Almost there — keep going!';
+        } else if (dist < 2.5) {
+          statusEl.textContent = 'Getting warmer...';
+        } else {
+          statusEl.textContent = 'Find the golden circle!';
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+
+    // ── Resize ────────────────────────────────────────────────────────────────
+    window.addEventListener('resize', () => {
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>

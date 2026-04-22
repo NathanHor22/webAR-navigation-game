@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(zapworks init *)",
+      "Read(//c/Users/damna/AppData/Roaming/npm/node_modules/@zappar/zapworks-cli/**)",
+      "Read(//c/Users/damna/AppData/Roaming/npm/node_modules/@zappar//**)",
+      "Bash(node -e ' *)",
+      "Bash(npm show *)",
+      "WebFetch(domain:docs.zap.works)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:unpkg.com)",
+      "WebFetch(domain:libs.zappar.com)",
+      "Bash(zapworks serve *)",
+      "Bash(jobs -l)",
+      "Bash(kill %1)"
+    ]
+  }
+}
