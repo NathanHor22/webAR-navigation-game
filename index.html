@@ -6,50 +6,30 @@
   <title>AR Treasure Hunt</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
-    body {
-      overflow: hidden;
-      background: #000;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    }
+    /* Canvas sits at z-index 0 — all UI goes above it */
+    canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
 
-    /* Canvas sits at z-index 0 — everything else goes on top */
-    canvas {
-      position: fixed;
-      top: 0; left: 0;
+    /* Shared screen base — hidden by default, shown via .visible */
+    .screen {
+      position: fixed; top: 0; left: 0;
       width: 100%; height: 100%;
-      z-index: 0;
-    }
-
-    /* ── Placement screen (shown before tap) ─────────────────────────────── */
-    #place-screen {
-      position: fixed;
       z-index: 10;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      display: flex;
+      display: none;
       flex-direction: column;
       align-items: center;
+    }
+    .screen.visible { display: flex; }
+
+    /* ── Place screen ──────────────────────────────────────────────────────── */
+    #place-screen {
       justify-content: flex-end;
       padding-bottom: 60px;
-      pointer-events: none;  /* let the tap pass through to the body */
+      gap: 16px;
+      pointer-events: none; /* screen itself doesn't block touches */
     }
-
-    #place-btn {
-      pointer-events: all;
-      background: #FFD700;
-      color: #1a1000;
-      border: none;
-      padding: 16px 40px;
-      border-radius: 50px;
-      font-size: 18px;
-      font-weight: 700;
-      cursor: pointer;
-      box-shadow: 0 4px 20px rgba(255,215,0,0.4);
-    }
-
     #place-hint {
-      margin-bottom: 16px;
       background: rgba(0,0,0,0.6);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
@@ -61,22 +41,26 @@
       border: 1px solid rgba(255,255,255,0.15);
       max-width: 300px;
     }
-
-    /* ── HUD (shown after tap) ───────────────────────────────────────────── */
-    #hud {
-      display: none;
-      position: fixed;
-      z-index: 10;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      pointer-events: none;
-      flex-direction: column;
-      align-items: center;
+    #place-btn {
+      pointer-events: all; /* re-enable on the button itself */
+      background: #FFD700;
+      color: #1a1000;
+      border: none;
+      padding: 16px 44px;
+      border-radius: 50px;
+      font-size: 18px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(255,215,0,0.4);
+      transition: opacity 0.3s;
     }
+    #place-btn:disabled { opacity: 0.45; cursor: default; }
 
+    /* ── Game HUD ──────────────────────────────────────────────────────────── */
+    #hud { pointer-events: none; }
     #score-bar {
       margin-top: 22px;
-      background: rgba(0,0,0,0.55);
+      background: rgba(0,0,0,0.6);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       color: #FFD700;
@@ -86,7 +70,6 @@
       font-weight: 700;
       border: 1px solid rgba(255,215,0,0.3);
     }
-
     #bottom-hints {
       position: absolute;
       bottom: 44px;
@@ -96,7 +79,6 @@
       gap: 10px;
       width: 100%;
     }
-
     #status-text {
       background: rgba(0,0,0,0.6);
       backdrop-filter: blur(10px);
@@ -109,7 +91,6 @@
       text-align: center;
       border: 1px solid rgba(255,255,255,0.12);
     }
-
     #nearest-badge {
       background: rgba(255,215,0,0.9);
       color: #1a1000;
@@ -119,13 +100,23 @@
       font-weight: 700;
     }
 
-    /* ── Collect flash ───────────────────────────────────────────────────── */
+    /* ── Win screen ────────────────────────────────────────────────────────── */
+    #win-screen {
+      justify-content: center;
+      gap: 18px;
+      background: rgba(0,0,0,0.82);
+      z-index: 20;
+    }
+    #win-screen .trophy { font-size: 80px; }
+    #win-screen .title  { color: #FFD700; font-size: 30px; font-weight: 800; }
+    #win-screen .sub    { color: rgba(255,255,255,0.65); font-size: 15px; }
+
+    /* ── Collect flash ─────────────────────────────────────────────────────── */
     #collect-flash {
       display: none;
       position: fixed;
       z-index: 20;
-      top: 45%;
-      left: 50%;
+      top: 42%; left: 50%;
       transform: translateX(-50%);
       color: #FFD700;
       font-size: 26px;
@@ -134,114 +125,98 @@
       text-shadow: 0 0 24px rgba(255,215,0,0.9);
       pointer-events: none;
     }
-
-    /* ── Win screen ──────────────────────────────────────────────────────── */
-    #win-screen {
-      display: none;
-      position: fixed;
-      z-index: 20;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: rgba(0,0,0,0.82);
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 18px;
+    @keyframes floatUp {
+      0%   { opacity: 1; transform: translateX(-50%) translateY(0)    scale(0.9); }
+      50%  { opacity: 1; transform: translateX(-50%) translateY(-28px) scale(1.1); }
+      100% { opacity: 0; transform: translateX(-50%) translateY(-56px) scale(1.0); }
     }
-
-    #win-screen .trophy { font-size: 80px; }
-    #win-screen .title  { color: #FFD700; font-size: 30px; font-weight: 800; }
-    #win-screen .sub    { color: rgba(255,255,255,0.65); font-size: 15px; }
   </style>
 </head>
 <body>
 
-  <!-- ── Placement screen ─────────────────────────────────────────────────── -->
-  <div id="place-screen">
-    <div id="place-hint">Stand at your starting point and tap the button to drop the treasures</div>
-    <button id="place-btn">Place Treasures</button>
+  <!-- shown until user taps "Place Treasures" -->
+  <div id="place-screen" class="screen visible">
+    <div id="place-hint">Point camera at the room, then tap to drop the treasures</div>
+    <button id="place-btn" disabled>Starting camera…</button>
   </div>
 
-  <!-- ── Game HUD ─────────────────────────────────────────────────────────── -->
-  <div id="hud">
+  <!-- shown after placement -->
+  <div id="hud" class="screen">
     <div id="score-bar">0 / 0 collected</div>
     <div id="bottom-hints">
       <div id="status-text">Walk towards a glowing orb</div>
-      <div id="nearest-badge">searching…</div>
+      <div id="nearest-badge">Searching…</div>
     </div>
   </div>
 
-  <!-- ── Collect flash / Win ──────────────────────────────────────────────── -->
-  <div id="collect-flash">⭐ Collected!</div>
-  <div id="win-screen">
+  <div id="win-screen" class="screen">
     <div class="trophy">🏆</div>
     <div class="title">All Treasures Found!</div>
     <div class="sub">Hunt complete — great job!</div>
   </div>
 
-  <!-- Three.js r158 — satisfies @zappar/zappar-threejs >=0.154 peer dep -->
+  <div id="collect-flash">⭐ Collected!</div>
+
+  <!-- Three.js r158 (zappar-threejs peer dep: >=0.154) -->
   <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
-  <!-- ZapWorks Universal AR for Three.js (standalone CDN) -->
+  <!-- ZapWorks Universal AR — ThreeJS standalone CDN -->
   <script src="https://libs.zappar.com/zappar-threejs/4.3.0/zappar-threejs.js"></script>
 
   <script>
-    // ═══════════════════════════════════════════════════════════════════════
-    //  TREASURE POINTS CONFIG
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  TREASURE CONFIG
     //
-    //  Coordinates are in METRES relative to where you tap "Place Treasures".
-    //  The direction you face when you tap = the -Z axis (forward).
+    //  Positions in METRES relative to where you stand when you tap "Place".
+    //  "Forward" = the direction you face when you tap.
     //
-    //    X  →  positive = to your RIGHT,    negative = to your LEFT
-    //    Z  →  negative = IN FRONT of you,  positive = BEHIND you
-    //    Y  →  leave at 0 (height is handled automatically)
+    //    x: positive = RIGHT,    negative = LEFT
+    //    z: negative = FORWARD,  positive = BEHIND
+    //    (leave y at 0 — height is handled automatically)
     //
     //  Examples:
-    //    { x:  0, z: -3 }   3 m straight ahead
-    //    { x:  2, z: -3 }   3 m ahead, 2 m to the right
-    //    { x: -1, z: -5 }   5 m ahead, 1 m to the left
-    //    { x:  0, z:  2 }   2 m directly behind you
-    // ═══════════════════════════════════════════════════════════════════════
+    //    { x:  0, z: -3 }   →  3 m straight ahead
+    //    { x:  2, z: -3 }   →  3 m ahead + 2 m right
+    //    { x: -1, z: -5 }   →  5 m ahead + 1 m left
+    // ═══════════════════════════════════════════════════════════════════════════
     const TREASURES = [
-      { label: 'Point A', x:  0, z: -3 },   // 3 m straight ahead
-      { label: 'Point B', x:  2, z: -3 },   // 3 m ahead, 2 m right
-      { label: 'Point C', x: -1, z: -5 },   // 5 m ahead, 1 m left
+      { label: 'Point A', x:  0, z: -3 },
+      { label: 'Point B', x:  2, z: -3 },
+      { label: 'Point C', x: -1, z: -5 },
     ];
+    const COLLECT_RADIUS = 0.9; // metres
 
-    const COLLECT_RADIUS = 0.9;  // metres — how close to trigger a collect
-    const ORB_HEIGHT     = 0.0;  // metres above anchor — 0 = same height as camera at tap
-
-    // ── Renderer ─────────────────────────────────────────────────────────────
+    // ── Renderer ───────────────────────────────────────────────────────────────
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
-    // Insert canvas as first child so it stays behind all UI elements (z-index 0)
+    // Insert canvas FIRST so all UI divs paint on top (they share z-index context)
     document.body.insertBefore(renderer.domElement, document.body.firstChild);
     ZapparThree.glContextSet(renderer.getContext());
 
-    // ── Scene & ZapWorks camera ───────────────────────────────────────────────
+    // ── Scene & ZapWorks camera ────────────────────────────────────────────────
     const scene = new THREE.Scene();
     const camera = new ZapparThree.Camera();
     scene.background = camera.backgroundTexture;
 
-    // ── Instant World Tracker ─────────────────────────────────────────────────
+    // ── Instant World Tracker ──────────────────────────────────────────────────
     const tracker = new ZapparThree.InstantWorldTracker();
     const anchor  = new ZapparThree.InstantWorldAnchorGroup(camera, tracker);
     scene.add(anchor);
-    anchor.visible = false;  // hidden until user taps to place
 
-    // ── Lighting ──────────────────────────────────────────────────────────────
+    // ── Lighting ───────────────────────────────────────────────────────────────
     scene.add(new THREE.AmbientLight(0xffffff, 1.3));
     const sun = new THREE.DirectionalLight(0xffffff, 0.7);
     sun.position.set(2, 4, 3);
     scene.add(sun);
 
-    // ── Build orbs ────────────────────────────────────────────────────────────
+    // ── Build orbs (hidden until placement) ───────────────────────────────────
     const orbs = TREASURES.map(cfg => {
       const group = new THREE.Group();
-      group.position.set(cfg.x, ORB_HEIGHT, cfg.z);
+      group.position.set(cfg.x, 0, cfg.z); // Y=0 → same height as camera at tap
+      group.visible = false;                // revealed on placement
       anchor.add(group);
 
-      // Glowing sphere — large enough to spot across the room
+      // Main sphere — large and bright enough to spot across a room
       const sphere = new THREE.Mesh(
         new THREE.SphereGeometry(0.2, 28, 28),
         new THREE.MeshStandardMaterial({
@@ -258,72 +233,67 @@
       );
       group.add(halo);
 
-      // Vertical beam — helps spot orb on the floor below
-      const BEAM = 2.0;
-      const beam = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.012, 0.012, BEAM, 8),
-        new THREE.MeshBasicMaterial({ color: 0xFFD700, transparent: true, opacity: 0.4 })
-      );
-      beam.position.y = -(BEAM / 2);
-      group.add(beam);
-
-      // Floor disc at beam tip (visible from above / at a distance)
-      const disc = new THREE.Mesh(
-        new THREE.CircleGeometry(0.28, 32),
-        new THREE.MeshBasicMaterial({ color: 0xFFD700, transparent: true, opacity: 0.6, side: THREE.DoubleSide })
-      );
-      disc.rotation.x = -Math.PI / 2;
-      disc.position.y = -BEAM;
-      group.add(disc);
-
-      // Point light
+      // Point light so the orb glows against real-world geometry
       const light = new THREE.PointLight(0xFFD700, 2.5, 3.5);
       group.add(light);
 
-      return { group, sphere, halo, disc, light, cfg, collected: false, worldPos: new THREE.Vector3() };
+      return {
+        group, sphere, halo, light,
+        cfg, collected: false,
+        worldPos: new THREE.Vector3(),
+      };
     });
 
-    // ── Camera permission + start ─────────────────────────────────────────────
+    // ── Camera permission ──────────────────────────────────────────────────────
+    // Button stays disabled until the camera is live, so setAnchorPoseFromCameraOffset
+    // is never called before the tracker has a valid camera pose.
+    const placeBtn = document.getElementById('place-btn');
+
     ZapparThree.permissionRequestUI().then(granted => {
-      if (granted) camera.start();
-      else ZapparThree.permissionDeniedUI();
+      if (granted) {
+        camera.start();
+        placeBtn.disabled    = false;
+        placeBtn.textContent = 'Place Treasures';
+      } else {
+        ZapparThree.permissionDeniedUI();
+      }
     });
 
-    // ── UI refs ───────────────────────────────────────────────────────────────
-    const placeScreen  = document.getElementById('place-screen');
-    const hud          = document.getElementById('hud');
+    // ── Place button ───────────────────────────────────────────────────────────
+    let gameStarted = false;
+
+    placeBtn.addEventListener('click', () => {
+      // Lock anchor to current camera pose
+      tracker.setAnchorPoseFromCameraOffset(0, 0, 0);
+
+      // Reveal all orbs
+      orbs.forEach(orb => { orb.group.visible = true; });
+      gameStarted = true;
+
+      // Swap screens
+      document.getElementById('place-screen').classList.remove('visible');
+      document.getElementById('hud').classList.add('visible');
+      document.getElementById('score-bar').textContent = `0 / ${TREASURES.length} collected`;
+    });
+
+    // ── UI refs ────────────────────────────────────────────────────────────────
     const scoreBarEl   = document.getElementById('score-bar');
     const statusTextEl = document.getElementById('status-text');
     const nearestBadge = document.getElementById('nearest-badge');
     const collectFlash = document.getElementById('collect-flash');
     const winScreen    = document.getElementById('win-screen');
-
     let collectedCount = 0;
-    let gameStarted    = false;
 
-    // ── Tap to place ──────────────────────────────────────────────────────────
-    // Anchor is set here — after tracking has had a chance to warm up —
-    // so the camera position is real and the anchor lands correctly.
-    document.getElementById('place-btn').addEventListener('click', () => {
-      tracker.setAnchorPoseFromCameraOffset(0, 0, 0);
-      anchor.visible = true;
-      gameStarted = true;
-      placeScreen.style.display  = 'none';
-      hud.style.display          = 'flex';
-      scoreBarEl.textContent     = `0 / ${TREASURES.length} collected`;
-    });
-
-    // ── Flash helper ──────────────────────────────────────────────────────────
     function showFlash(text) {
       collectFlash.textContent = text;
-      collectFlash.style.display = 'block';
       collectFlash.style.animation = 'none';
-      void collectFlash.offsetHeight;  // reflow to restart animation
-      collectFlash.style.animation = '';
-      setTimeout(() => { collectFlash.style.display = 'none'; }, 1400);
+      void collectFlash.offsetHeight; // force reflow to restart animation
+      collectFlash.style.animation = 'floatUp 1.4s ease-out forwards';
+      collectFlash.style.display   = 'block';
+      setTimeout(() => { collectFlash.style.display = 'none'; }, 1500);
     }
 
-    // ── Render loop ───────────────────────────────────────────────────────────
+    // ── Render loop ────────────────────────────────────────────────────────────
     function animate() {
       requestAnimationFrame(animate);
       camera.updateFrame(renderer);
@@ -336,22 +306,18 @@
         orbs.forEach(orb => {
           if (orb.collected) return;
 
-          // Animate orb
+          // Pulse + spin animations
           const pulse = 1 + 0.12 * Math.sin(t * 2.4);
           orb.sphere.scale.setScalar(pulse);
-          orb.halo.rotation.y  = t * 1.6;
-          orb.halo.rotation.x  = Math.sin(t * 0.8) * 0.4;
-          orb.disc.scale.setScalar(0.85 + 0.15 * Math.sin(t * 2.4));
-          orb.light.intensity  = 1.8 + 1.2 * Math.sin(t * 2.4);
+          orb.halo.rotation.y = t * 1.6;
+          orb.halo.rotation.x = Math.sin(t * 0.8) * 0.4;
+          orb.light.intensity = 1.8 + 1.2 * Math.sin(t * 2.4);
 
-          // Proximity check (world space)
+          // Proximity check
           orb.group.getWorldPosition(orb.worldPos);
           const dist = camera.position.distanceTo(orb.worldPos);
 
-          if (dist < closestDist) {
-            closestDist  = dist;
-            closestLabel = orb.cfg.label;
-          }
+          if (dist < closestDist) { closestDist = dist; closestLabel = orb.cfg.label; }
 
           if (dist < COLLECT_RADIUS) {
             orb.collected = true;
@@ -359,17 +325,16 @@
             collectedCount++;
             scoreBarEl.textContent = `${collectedCount} / ${TREASURES.length} collected`;
             showFlash(`⭐ ${orb.cfg.label} collected!`);
-
             if (collectedCount === TREASURES.length) {
-              hud.style.display      = 'none';
-              winScreen.style.display = 'flex';
+              document.getElementById('hud').classList.remove('visible');
+              winScreen.classList.add('visible');
             }
           }
         });
 
-        // Update HUD hints
-        if (collectedCount < TREASURES.length && closestDist < Infinity) {
-          nearestBadge.textContent = `${closestLabel} — ${closestDist.toFixed(1)} m away`;
+        // Nearest distance hint
+        if (closestDist < Infinity) {
+          nearestBadge.textContent = `${closestLabel} — ${closestDist.toFixed(1)} m`;
           if      (closestDist < 1.2) statusTextEl.textContent = 'Almost there!';
           else if (closestDist < 2.5) statusTextEl.textContent = 'Getting warmer…';
           else                        statusTextEl.textContent = 'Walk towards a glowing orb';
@@ -383,15 +348,5 @@
 
     window.addEventListener('resize', () => renderer.setSize(window.innerWidth, window.innerHeight));
   </script>
-
-  <!-- Flash animation defined here so it applies after the canvas is inserted -->
-  <style>
-    @keyframes floatUp {
-      0%   { opacity: 1; transform: translateX(-50%) translateY(0)   scale(0.9); }
-      50%  { opacity: 1; transform: translateX(-50%) translateY(-30px) scale(1.05); }
-      100% { opacity: 0; transform: translateX(-50%) translateY(-60px) scale(1); }
-    }
-    #collect-flash { animation: floatUp 1.4s ease-out both; }
-  </style>
 </body>
 </html>
