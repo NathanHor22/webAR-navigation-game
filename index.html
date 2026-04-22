@@ -13,13 +13,10 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     }
 
-    canvas {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-    }
+    canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
 
-    #overlay {
+    /* ── HUD ─────────────────────────────────────────────────────────────── */
+    #hud {
       position: fixed;
       top: 0; left: 0;
       width: 100%; height: 100%;
@@ -27,206 +24,326 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: flex-end;
-      padding-bottom: 48px;
-      gap: 12px;
     }
 
-    #status {
-      background: rgba(0, 0, 0, 0.6);
+    #score-bar {
+      margin-top: 20px;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      color: #FFD700;
+      padding: 10px 24px;
+      border-radius: 24px;
+      font-size: 18px;
+      font-weight: 700;
+      border: 1px solid rgba(255,215,0,0.35);
+      letter-spacing: 1px;
+    }
+
+    #hints {
+      position: absolute;
+      bottom: 44px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #status-text {
+      background: rgba(0,0,0,0.6);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       color: #fff;
-      padding: 14px 28px;
-      border-radius: 32px;
-      font-size: 17px;
+      padding: 12px 26px;
+      border-radius: 28px;
+      font-size: 16px;
       font-weight: 500;
       text-align: center;
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      transition: opacity 0.4s;
+      border: 1px solid rgba(255,255,255,0.15);
     }
 
-    #distance-badge {
-      background: rgba(255, 215, 0, 0.9);
+    #nearest-badge {
+      background: rgba(255,215,0,0.88);
       color: #1a1000;
-      padding: 8px 22px;
-      border-radius: 20px;
-      font-size: 15px;
+      padding: 7px 20px;
+      border-radius: 18px;
+      font-size: 14px;
       font-weight: 700;
-      letter-spacing: 0.3px;
-      transition: opacity 0.4s;
     }
 
-    #collected-screen {
+    /* ── Win screen ──────────────────────────────────────────────────────── */
+    #win-screen {
       display: none;
       position: fixed;
       top: 0; left: 0;
       width: 100%; height: 100%;
-      background: rgba(0, 0, 0, 0.75);
+      background: rgba(0,0,0,0.82);
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 20px;
+      gap: 18px;
     }
 
-    #collected-screen.show { display: flex; }
-
-    #collected-screen .star { font-size: 72px; animation: pop 0.5s ease-out; }
-    #collected-screen .title {
-      color: #FFD700;
-      font-size: 32px;
-      font-weight: 800;
-      letter-spacing: 1px;
-    }
-    #collected-screen .subtitle {
-      color: rgba(255,255,255,0.7);
-      font-size: 16px;
-    }
+    #win-screen .trophy  { font-size: 80px; animation: pop 0.5s ease-out both; }
+    #win-screen .title   { color: #FFD700; font-size: 30px; font-weight: 800; letter-spacing: 1px; }
+    #win-screen .sub     { color: rgba(255,255,255,0.65); font-size: 15px; }
 
     @keyframes pop {
       0%   { transform: scale(0); opacity: 0; }
-      70%  { transform: scale(1.2); }
+      70%  { transform: scale(1.25); }
       100% { transform: scale(1); opacity: 1; }
+    }
+
+    /* Individual collect flash */
+    #collect-flash {
+      display: none;
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      color: #FFD700;
+      font-size: 28px;
+      font-weight: 800;
+      text-shadow: 0 0 20px rgba(255,215,0,0.9);
+      pointer-events: none;
+      animation: floatUp 1.2s ease-out both;
+    }
+    @keyframes floatUp {
+      0%   { opacity: 1; transform: translate(-50%, -50%) scale(0.8); }
+      60%  { opacity: 1; transform: translate(-50%, -120%) scale(1.1); }
+      100% { opacity: 0; transform: translate(-50%, -180%) scale(1); }
     }
   </style>
 </head>
 <body>
 
-  <!-- Game UI -->
-  <div id="overlay">
-    <div id="status">Find the golden circle!</div>
-    <div id="distance-badge" style="display:none">— m away</div>
+  <div id="hud">
+    <div id="score-bar">0 / 0 collected</div>
+    <div id="hints">
+      <div id="status-text">Walk towards a glowing orb to collect it</div>
+      <div id="nearest-badge" style="display:none">...</div>
+    </div>
   </div>
 
-  <!-- Collected celebration -->
-  <div id="collected-screen">
-    <div class="star">⭐</div>
-    <div class="title">Treasure Found!</div>
-    <div class="subtitle">You collected the golden circle.</div>
+  <div id="win-screen">
+    <div class="trophy">🏆</div>
+    <div class="title">All Treasures Found!</div>
+    <div class="sub">Hunt complete — great job!</div>
   </div>
 
-  <!-- Three.js r158 (satisfies zappar-threejs >= 0.154 peer dep) -->
+  <div id="collect-flash">⭐ Collected!</div>
+
+  <!-- Three.js r158 — satisfies zappar-threejs >=0.154 peer dep -->
   <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
-
-  <!-- ZapWorks Universal AR – ThreeJS, standalone CDN build -->
+  <!-- ZapWorks Universal AR for Three.js (standalone CDN) -->
   <script src="https://libs.zappar.com/zappar-threejs/4.3.0/zappar-threejs.js"></script>
 
   <script>
-    // ── Renderer ─────────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  TREASURE POINTS — edit this array to place your collectibles
+    //
+    //  Coordinates are in METRES, relative to where the user stands on launch.
+    //  The coordinate origin (0, 0, 0) is the user's eye position at start.
+    //
+    //  X  →  positive = RIGHT of you,      negative = LEFT of you
+    //  Y  →  positive = ABOVE eye level,   negative = below eye level
+    //  Z  →  positive = BEHIND you,        negative = IN FRONT of you
+    //
+    //  Examples:
+    //    { x: 0,  z: -3 }   →  3 m straight ahead
+    //    { x: 2,  z: -3 }   →  3 m ahead + 2 m to the right
+    //    { x: -1, z: -5 }   →  5 m ahead + 1 m to the left
+    //    { x: 0,  z:  2 }   →  2 m directly behind you
+    //
+    //  "Forward" = whichever direction you face when the app first loads.
+    //  There is no real-world compass without extra hardware.
+    // ═══════════════════════════════════════════════════════════════════════════
+    const TREASURES = [
+      { label: 'Point A', x:  0, y: 0, z: -3  },   // 3 m straight ahead
+      { label: 'Point B', x:  2, y: 0, z: -3  },   // 3 m ahead, 2 m right
+      { label: 'Point C', x: -1, y: 0, z: -5  },   // 5 m ahead, 1 m left
+    ];
+
+    // Distance (metres) within which the user collects an orb
+    const COLLECT_RADIUS = 0.9;
+
+    // ── Renderer ───────────────────────────────────────────────────────────────
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
-
     ZapparThree.glContextSet(renderer.getContext());
 
-    // ── Scene & Camera ────────────────────────────────────────────────────────
+    // ── Scene & ZapWorks camera ────────────────────────────────────────────────
     const scene = new THREE.Scene();
     const camera = new ZapparThree.Camera();
     scene.background = camera.backgroundTexture;
 
-    // ── Instant World Tracker ─────────────────────────────────────────────────
-    // Instant tracking anchors AR content to the real world without an image target.
-    const instantTracker = new ZapparThree.InstantWorldTracker();
-    const instantAnchor = new ZapparThree.InstantWorldAnchorGroup(camera, instantTracker);
-    scene.add(instantAnchor);
+    // ── Instant World Tracker ──────────────────────────────────────────────────
+    // Anchors the AR world to the physical space using visual odometry (no scan
+    // or image target required). The anchor origin is set to the user's position
+    // on startup; all TREASURES coordinates are relative to that origin.
+    const tracker = new ZapparThree.InstantWorldTracker();
+    const anchor  = new ZapparThree.InstantWorldAnchorGroup(camera, tracker);
+    scene.add(anchor);
+    tracker.setAnchorPoseFromCameraOffset(0, 0, 0);
 
-    // Place anchor 3 m in front of the user's starting position.
-    // Call this once; the anchor stays fixed in world space after placement.
-    instantTracker.setAnchorPoseFromCameraOffset(0, 0, -3);
+    // ── Lighting ───────────────────────────────────────────────────────────────
+    scene.add(new THREE.AmbientLight(0xffffff, 1.3));
+    const sun = new THREE.DirectionalLight(0xffffff, 0.7);
+    sun.position.set(2, 4, 3);
+    scene.add(sun);
 
-    // ── Lighting ──────────────────────────────────────────────────────────────
-    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+    // ── Build treasure orbs ────────────────────────────────────────────────────
+    // Each orb = glowing sphere + spinning halo + vertical beam (floor pointer)
+    const orbs = TREASURES.map(cfg => {
+      const group = new THREE.Group();
+      // Place at configured XZ, Y=0 means eye level at launch height
+      group.position.set(cfg.x, cfg.y, cfg.z);
+      anchor.add(group);
 
-    const sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    sunLight.position.set(1, 3, 2);
-    scene.add(sunLight);
+      // Glowing sphere — visible from all directions at eye level
+      const sphere = new THREE.Mesh(
+        new THREE.SphereGeometry(0.18, 28, 28),
+        new THREE.MeshStandardMaterial({
+          color:             0xFFD700,
+          emissive:          0xFF9900,
+          emissiveIntensity: 0.9,
+          roughness:         0.15,
+          metalness:         0.6,
+        })
+      );
+      group.add(sphere);
 
-    // ── Golden Circle (collectible) ───────────────────────────────────────────
-    // Flat disc sitting at the anchor origin (the floor point 3 m ahead).
-    const discGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.03, 48);
-    const discMat = new THREE.MeshStandardMaterial({
-      color: 0xFFD700,
-      emissive: 0xFFAA00,
-      emissiveIntensity: 0.6,
-      roughness: 0.25,
-      metalness: 0.6,
+      // Spinning halo ring around the sphere
+      const halo = new THREE.Mesh(
+        new THREE.TorusGeometry(0.26, 0.016, 8, 48),
+        new THREE.MeshBasicMaterial({ color: 0xFFE55C, transparent: true, opacity: 0.85 })
+      );
+      group.add(halo);
+
+      // Vertical beam pointing down — helps locate the orb on the floor below
+      // Extends ~2.2 m downward to reach the floor from eye-level anchor
+      const BEAM_LEN = 2.2;
+      const beam = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.012, 0.012, BEAM_LEN, 8),
+        new THREE.MeshBasicMaterial({ color: 0xFFD700, transparent: true, opacity: 0.35 })
+      );
+      beam.position.y = -(BEAM_LEN / 2); // hang down from sphere centre
+      group.add(beam);
+
+      // Floor disc at bottom of beam (easier to spot on the ground)
+      const floorDisc = new THREE.Mesh(
+        new THREE.CircleGeometry(0.22, 32),
+        new THREE.MeshBasicMaterial({
+          color: 0xFFD700, transparent: true, opacity: 0.55,
+          side: THREE.DoubleSide,
+        })
+      );
+      floorDisc.rotation.x = -Math.PI / 2;         // lie flat
+      floorDisc.position.y = -BEAM_LEN;             // at floor (beam tip)
+      group.add(floorDisc);
+
+      // Warm point light around the orb
+      const light = new THREE.PointLight(0xFFD700, 2.0, 3.0);
+      group.add(light);
+
+      return {
+        group, sphere, halo, floorDisc, light,
+        cfg,
+        collected: false,
+        worldPos: new THREE.Vector3(),
+      };
     });
-    const disc = new THREE.Mesh(discGeo, discMat);
-    disc.position.set(0, 0, 0);
-    instantAnchor.add(disc);
 
-    // Floating halo ring above the disc
-    const ringGeo = new THREE.TorusGeometry(0.36, 0.025, 8, 48);
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: 0xFFE44D,
-      transparent: true,
-      opacity: 0.85,
-    });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
-    ring.rotation.x = Math.PI / 2;
-    ring.position.set(0, 0.12, 0);
-    instantAnchor.add(ring);
-
-    // Warm point light so the disc lights up nearby surfaces
-    const glow = new THREE.PointLight(0xFFD700, 1.5, 1.8);
-    glow.position.set(0, 0.4, 0);
-    instantAnchor.add(glow);
-
-    // ── Camera Permissions ────────────────────────────────────────────────────
+    // ── Camera permission ──────────────────────────────────────────────────────
     ZapparThree.permissionRequestUI().then(granted => {
       if (granted) camera.start();
       else ZapparThree.permissionDeniedUI();
     });
 
-    // ── UI Elements ───────────────────────────────────────────────────────────
-    const statusEl      = document.getElementById('status');
-    const distanceBadge = document.getElementById('distance-badge');
-    const collectedScreen = document.getElementById('collected-screen');
+    // ── UI refs ────────────────────────────────────────────────────────────────
+    const scoreBarEl    = document.getElementById('score-bar');
+    const statusTextEl  = document.getElementById('status-text');
+    const nearestBadge  = document.getElementById('nearest-badge');
+    const winScreen     = document.getElementById('win-screen');
+    const collectFlash  = document.getElementById('collect-flash');
 
-    let collected = false;
-    const targetWorldPos = new THREE.Vector3();
+    let collectedCount = 0;
+    scoreBarEl.textContent = `0 / ${TREASURES.length} collected`;
 
-    // ── Render Loop ───────────────────────────────────────────────────────────
+    function showCollectFlash(label) {
+      collectFlash.textContent = `⭐ ${label} collected!`;
+      collectFlash.style.display = 'block';
+      // Re-trigger CSS animation by cloning the node
+      const clone = collectFlash.cloneNode(true);
+      collectFlash.parentNode.replaceChild(clone, collectFlash);
+      // Re-assign ref after DOM swap
+      Object.assign(collectFlash, clone);
+    }
+
+    // ── Render loop ────────────────────────────────────────────────────────────
     function animate() {
       requestAnimationFrame(animate);
       camera.updateFrame(renderer);
 
-      if (!collected) {
+      if (collectedCount < TREASURES.length) {
         const t = Date.now() * 0.001;
+        let closestDist  = Infinity;
+        let closestLabel = '';
 
-        // Pulse the disc in XZ plane
-        const pulse = 1 + 0.09 * Math.sin(t * 2.2);
-        disc.scale.set(pulse, 1, pulse);
+        orbs.forEach(orb => {
+          if (orb.collected) return;
 
-        // Bob the halo ring up and down
-        ring.position.y = 0.1 + 0.06 * Math.sin(t * 2.2);
-        ring.scale.setScalar(pulse);
+          // Animations
+          const pulse = 1 + 0.11 * Math.sin(t * 2.4);
+          orb.sphere.scale.setScalar(pulse);
+          orb.halo.rotation.y = t * 1.6;
+          orb.halo.rotation.x = Math.sin(t * 0.9) * 0.35;
+          orb.floorDisc.scale.setScalar(0.9 + 0.1 * Math.sin(t * 2.4));
+          orb.light.intensity = 1.5 + 1.0 * Math.sin(t * 2.4);
 
-        // Modulate glow intensity
-        glow.intensity = 1.2 + 0.6 * Math.sin(t * 2.2);
+          // Proximity check in world space
+          orb.group.getWorldPosition(orb.worldPos);
+          const dist = camera.position.distanceTo(orb.worldPos);
 
-        // Proximity check: distance from camera to disc in world space
-        disc.getWorldPosition(targetWorldPos);
-        const dist = camera.position.distanceTo(targetWorldPos);
+          if (dist < closestDist) {
+            closestDist  = dist;
+            closestLabel = orb.cfg.label;
+          }
 
-        distanceBadge.style.display = 'block';
-        distanceBadge.textContent = dist.toFixed(1) + ' m away';
+          if (dist < COLLECT_RADIUS) {
+            orb.collected = true;
+            orb.group.visible = false;
+            collectedCount++;
+            scoreBarEl.textContent = `${collectedCount} / ${TREASURES.length} collected`;
 
-        if (dist < 0.65) {
-          // ── Collected! ────────────────────────────────────────────────────
-          collected = true;
-          disc.visible = false;
-          ring.visible = false;
-          glow.visible = false;
-          document.getElementById('overlay').style.display = 'none';
-          collectedScreen.classList.add('show');
-        } else if (dist < 1.5) {
-          statusEl.textContent = 'Almost there — keep going!';
-        } else if (dist < 2.5) {
-          statusEl.textContent = 'Getting warmer...';
-        } else {
-          statusEl.textContent = 'Find the golden circle!';
+            // Flash message
+            const flash = document.getElementById('collect-flash');
+            flash.textContent = `⭐ ${orb.cfg.label} collected!`;
+            flash.style.animation = 'none';
+            flash.offsetHeight; // reflow to restart animation
+            flash.style.animation = '';
+            flash.style.display = 'block';
+
+            if (collectedCount === TREASURES.length) {
+              document.getElementById('hud').style.display = 'none';
+              winScreen.style.display = 'flex';
+            }
+          }
+        });
+
+        // Nearest hint
+        if (collectedCount < TREASURES.length && closestDist < Infinity) {
+          nearestBadge.style.display = 'block';
+          nearestBadge.textContent   = `${closestLabel} — ${closestDist.toFixed(1)} m`;
+
+          if (closestDist < 1.2) {
+            statusTextEl.textContent = 'Almost there!';
+          } else if (closestDist < 2.5) {
+            statusTextEl.textContent = 'Getting warmer…';
+          } else {
+            statusTextEl.textContent = 'Walk towards a glowing orb';
+          }
         }
       }
 
@@ -235,10 +352,7 @@
 
     animate();
 
-    // ── Resize ────────────────────────────────────────────────────────────────
-    window.addEventListener('resize', () => {
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
+    window.addEventListener('resize', () => renderer.setSize(window.innerWidth, window.innerHeight));
   </script>
 </body>
 </html>
